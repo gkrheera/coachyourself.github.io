@@ -1,12 +1,10 @@
 <!--
-Version: 10.0.1 (Supabase Migration - JS Fix)
+Version: 10.0.3 (Supabase Migration - Quick Guidance Optimization)
 Date: July 31, 2025
 Notes:
-- Corrected a JavaScript variable initialization error ('supabase' vs 'supabaseClient').
-- This version is designed to run on Supabase.
-- All sensitive data (API Key, System Prompt) has been removed from the client-side code.
-- The chatbot now communicates with a secure Supabase Edge Function ("coaching-proxy") instead of directly with the Gemini API.
-- Added the Supabase JS client library.
+- Optimizes the "Quick Guidance" path to use a dedicated API task.
+- This provides more accurate and context-aware guidance questions.
+- The chatbot is now fully restored to its original effectiveness.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -125,17 +123,13 @@ Notes:
             const INITIAL_COACH_MESSAGE = "Hello! I'm here to offer a confidential space for our conversation. To begin, what feels most important for you to focus on today?";
             
             // Initialize the Supabase client.
-            // These keys are safe to be public. The real security is in your Edge Function and database policies.
             const SUPABASE_URL = 'https://cthplmtrawzqtgdliebl.supabase.co';
             const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0aHBsbXRyYXd6cXRnZGxpZWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NzI3NzUsImV4cCI6MjA2OTU0ODc3NX0.uzUHhbWulubUn6LZkeYQZcwLh7yVp1DXsrccP-6WPqA';
-            
-            // *** CORRECTION HERE ***
-            // The variable is now named 'supabaseClient' to avoid conflict with the library's global object.
             const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
             // --- STATE MANAGEMENT ---
             let chatHistory = [];
-            let conversationState = 'AWAITING_CHALLENGE'; // AWAITING_CHALLENGE, AWAITING_CONTEXT, AWAITING_PATH_CHOICE, IN_COACHING
+            let conversationState = 'AWAITING_CHALLENGE';
             let userContext = null;
             let userChallenge = null;
             let isTtsEnabled = true;
@@ -161,25 +155,17 @@ Notes:
                 recognition.interimResults = true;
 
                 recognition.onresult = (event) => {
-                    const transcript = Array.from(event.results)
-                        .map(result => result[0])
-                        .map(result => result.transcript)
-                        .join('');
+                    const transcript = Array.from(event.results).map(result => result[0]).map(result => result.transcript).join('');
                     chatInput.value = transcript;
                 };
-
                 recognition.onend = () => {
                     micButton.classList.remove('listening');
-                    if (chatInput.value.trim()) {
-                        handleSend();
-                    }
+                    if (chatInput.value.trim()) { handleSend(); }
                 };
-
                 recognition.onerror = (event) => {
                     console.error("Speech recognition error", event.error);
                     micButton.classList.remove('listening');
                 };
-
                 micButton.addEventListener('click', () => {
                     if (micButton.classList.contains('listening')) {
                         recognition.stop();
@@ -194,19 +180,15 @@ Notes:
                 isTtsEnabled = !isTtsEnabled;
                 speakerOnIcon.classList.toggle('hidden', !isTtsEnabled);
                 speakerOffIcon.classList.toggle('hidden', isTtsEnabled);
-                if (!isTtsEnabled) {
-                    window.speechSynthesis.cancel();
-                }
+                if (!isTtsEnabled) { window.speechSynthesis.cancel(); }
             });
 
             // --- CHATBOT LOGIC ---
             const addMessage = (sender, message, isHtml = false) => {
                 const messageWrapper = document.createElement('div');
                 messageWrapper.className = `w-full flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
-                
                 const messageBubble = document.createElement('div');
                 messageBubble.className = `max-w-md rounded-lg p-3 ${sender === 'user' ? 'bg-[#003F5C] text-white' : 'bg-white text-gray-800 shadow-sm'}`;
-                
                 let textToSpeak = message;
                 if (isHtml) {
                     messageBubble.innerHTML = message;
@@ -218,11 +200,9 @@ Notes:
                     messageText.innerHTML = message.replace(/\n/g, '<br>');
                     messageBubble.appendChild(messageText);
                 }
-                
                 messageWrapper.appendChild(messageBubble);
                 chatWindow.appendChild(messageWrapper);
                 chatWindow.scrollTop = chatWindow.scrollHeight;
-
                 if (sender === 'bot' && isTtsEnabled && textToSpeak.trim().length > 0) {
                     const utterance = new SpeechSynthesisUtterance(textToSpeak);
                     window.speechSynthesis.cancel();
@@ -260,32 +240,17 @@ Notes:
                 addMessage('bot', INITIAL_COACH_MESSAGE);
             };
 
-            // *** THIS IS THE NEW, SECURE FUNCTION ***
-            // It calls your Supabase Edge Function instead of Google's API.
-            const getBotResponse = async (userText, coachingPath = null) => {
-                // The system prompt is now handled securely on the server.
-                // We only need to manage the ongoing conversation history here.
-                let userMessage = userText;
-                if (coachingPath) {
-                    userMessage = `The user's situation relates to ${userContext}. Their challenge is: "${userChallenge}". They have chosen the path of "${coachingPath}". Please begin the coaching process according to the instructions for that path in your system prompt.`;
-                }
-
-                chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
-
+            const getBotResponse = async (userText) => {
+                chatHistory.push({ role: "user", parts: [{ text: userText }] });
                 try {
-                    // *** CORRECTION HERE ***
-                    // This now uses the correctly named 'supabaseClient' variable.
                     const { data, error } = await supabaseClient.functions.invoke('coaching-proxy', {
                         body: { chatHistory: chatHistory },
                     });
-
                     if (error) throw error;
-
                     const botResponse = data.botResponse;
                     chatHistory.push({ role: "model", parts: [{ text: botResponse }] });
                     hideChatSpinner();
                     addMessage('bot', botResponse);
-
                 } catch (error) {
                     console.error("Supabase function call failed:", error);
                     hideChatSpinner();
@@ -293,23 +258,63 @@ Notes:
                 }
             };
 
+            const getSummary = async (challenge, context) => {
+                try {
+                    const { data, error } = await supabaseClient.functions.invoke('coaching-proxy', {
+                        body: { task: 'summarize', challenge, context },
+                    });
+                    if (error) throw error;
+                    return data.summary;
+                } catch (error) {
+                    console.error("Summarization call failed:", error);
+                    return `It sounds like you're dealing with: "${challenge}"`;
+                }
+            };
+            
+            // NEW: Function for dedicated Quick Guidance
+            const getQuickGuidance = async () => {
+                showChatSpinner();
+                try {
+                    const { data, error } = await supabaseClient.functions.invoke('coaching-proxy', {
+                        body: { task: 'quick_guidance', challenge: userChallenge, context: userContext },
+                    });
+                    if (error) throw error;
+                    
+                    hideChatSpinner();
+                    addMessage('bot', data.guidance);
+                    addMessage('bot', "I hope these questions provide a useful starting point for your reflection. Feel free to clear the chat to begin a new session anytime.");
+
+                } catch (error) {
+                    console.error("Quick guidance call failed:", error);
+                    hideChatSpinner();
+                    addMessage('bot', 'Sorry, I was unable to generate guidance at this time.');
+                }
+                conversationState = 'IN_COACHING'; // End state
+            };
+
+
             const handlePathSelection = (path) => {
                 const buttonContainer = document.getElementById('path-choice-container');
-                if (buttonContainer) {
-                    buttonContainer.remove();
-                }
-                
+                if (buttonContainer) { buttonContainer.remove(); }
                 addMessage('user', `I'll take the "${path}" path.`);
-                conversationState = 'IN_COACHING';
-                showChatSpinner();
-                getBotResponse(null, path);
+                
+                // UPDATED: Route to the correct function based on path
+                if (path === 'Quick Guidance') {
+                    getQuickGuidance();
+                } else {
+                    conversationState = 'IN_COACHING';
+                    const startMessage = `The user's situation relates to ${userContext}. Their challenge is: "${userChallenge}". They have chosen the path of "Situation-Specific Coaching". Please begin the coaching process according to the instructions for that path in your system prompt.`;
+                    chatHistory.push({ role: "user", parts: [{ text: startMessage }] });
+                    showChatSpinner();
+                    // This is a "fake" user message to kickstart the AI
+                    getBotResponse("Okay, let's begin."); 
+                }
             };
 
             const handleSend = async () => {
                 window.speechSynthesis.cancel();
                 const userText = chatInput.value.trim();
                 if (!userText) return;
-
                 addMessage('user', userText);
                 chatInput.value = '';
                 
@@ -322,10 +327,15 @@ Notes:
                     userContext = userText;
                     chatHistory.push({ role: "user", parts: [{ text: `The situation is related to ${userText}.` }] });
                     
-                    const summary = userChallenge.length > 80 ? userChallenge.substring(0, 80) + '...' : userChallenge;
+                    sendButton.disabled = true;
+                    showChatSpinner();
+                    const summary = await getSummary(userChallenge, userContext);
+                    hideChatSpinner();
+                    sendButton.disabled = false;
+
                     const choiceHtml = `
-                        <p>Thank you. It sounds like you're dealing with: "${summary}". I can help in a couple of ways.</p>
-                        <p class="mt-2">Would you prefer some <strong>Quick Guidance</strong>, where I suggest a relevant framework and some key questions to think about, or would you prefer more in-depth, <strong>Situation-Specific Coaching</strong> where we can explore this together step-by-step?</p>
+                        <p>${summary}</p>
+                        <p class="mt-2">I can help in a couple of ways. Would you prefer some <strong>Quick Guidance</strong>, where I suggest a relevant framework and some key questions to think about, or would you prefer more in-depth, <strong>Situation-Specific Coaching</strong> where we can explore this together step-by-step?</p>
                         <div id="path-choice-container" class="mt-2">
                             <button class="chat-button" onclick="handlePathSelection('Quick Guidance')">Quick Guidance</button>
                             <button class="chat-button" onclick="handlePathSelection('Situation-Specific Coaching')">Situation-Specific Coaching</button>
@@ -346,7 +356,6 @@ Notes:
             sendButton.addEventListener('click', handleSend);
             chatInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') handleSend(); });
             clearChatButton.addEventListener('click', resetChat);
-
             window.handlePathSelection = handlePathSelection;
 
             // --- INITIALIZATION ---
