@@ -1,7 +1,8 @@
 <!--
-Version: 10.0.0 (Supabase Migration )
+Version: 10.0.1 (Supabase Migration - JS Fix)
 Date: July 31, 2025
 Notes:
+- Corrected a JavaScript variable initialization error ('supabase' vs 'supabaseClient').
 - This version is designed to run on Supabase.
 - All sensitive data (API Key, System Prompt) has been removed from the client-side code.
 - The chatbot now communicates with a secure Supabase Edge Function ("coaching-proxy") instead of directly with the Gemini API.
@@ -127,7 +128,10 @@ Notes:
             // These keys are safe to be public. The real security is in your Edge Function and database policies.
             const SUPABASE_URL = 'https://cthplmtrawzqtgdliebl.supabase.co';
             const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0aHBsbXRyYXd6cXRnZGxpZWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NzI3NzUsImV4cCI6MjA2OTU0ODc3NX0.uzUHhbWulubUn6LZkeYQZcwLh7yVp1DXsrccP-6WPqA';
-            const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            // *** CORRECTION HERE ***
+            // The variable is now named 'supabaseClient' to avoid conflict with the library's global object.
+            const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
             // --- STATE MANAGEMENT ---
             let chatHistory = [];
@@ -269,8 +273,9 @@ Notes:
                 chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
 
                 try {
-                    // This securely calls your 'coaching-proxy' function on Supabase.
-                    const { data, error } = await supabase.functions.invoke('coaching-proxy', {
+                    // *** CORRECTION HERE ***
+                    // This now uses the correctly named 'supabaseClient' variable.
+                    const { data, error } = await supabaseClient.functions.invoke('coaching-proxy', {
                         body: { chatHistory: chatHistory },
                     });
 
