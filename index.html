@@ -1,10 +1,9 @@
 <!--
-Version: 10.0.3 (Supabase Migration - Quick Guidance Optimization)
+Version: 10.0.4 (Supabase Migration - Final Logic Restoration)
 Date: July 31, 2025
 Notes:
-- Optimizes the "Quick Guidance" path to use a dedicated API task.
-- This provides more accurate and context-aware guidance questions.
-- The chatbot is now fully restored to its original effectiveness.
+- Restores the original, multi-step conversational flow for the "Quick Guidance" path.
+- The chatbot is now fully aligned with the prototype's superior conversational logic.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -240,8 +239,15 @@ Notes:
                 addMessage('bot', INITIAL_COACH_MESSAGE);
             };
 
-            const getBotResponse = async (userText) => {
-                chatHistory.push({ role: "user", parts: [{ text: userText }] });
+            const getBotResponse = async (userText, coachingPath = null) => {
+                let userMessage = userText;
+                // This logic constructs the initial message to the AI when a path is chosen
+                if (coachingPath) {
+                    userMessage = `The user's situation relates to ${userContext}. Their challenge is: "${userChallenge}". They have chosen the path of "${coachingPath}". Please begin the coaching process according to the instructions for that path in your system prompt.`;
+                }
+                
+                chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+                
                 try {
                     const { data, error } = await supabaseClient.functions.invoke('coaching-proxy', {
                         body: { chatHistory: chatHistory },
@@ -270,45 +276,17 @@ Notes:
                     return `It sounds like you're dealing with: "${challenge}"`;
                 }
             };
-            
-            // NEW: Function for dedicated Quick Guidance
-            const getQuickGuidance = async () => {
-                showChatSpinner();
-                try {
-                    const { data, error } = await supabaseClient.functions.invoke('coaching-proxy', {
-                        body: { task: 'quick_guidance', challenge: userChallenge, context: userContext },
-                    });
-                    if (error) throw error;
-                    
-                    hideChatSpinner();
-                    addMessage('bot', data.guidance);
-                    addMessage('bot', "I hope these questions provide a useful starting point for your reflection. Feel free to clear the chat to begin a new session anytime.");
-
-                } catch (error) {
-                    console.error("Quick guidance call failed:", error);
-                    hideChatSpinner();
-                    addMessage('bot', 'Sorry, I was unable to generate guidance at this time.');
-                }
-                conversationState = 'IN_COACHING'; // End state
-            };
-
 
             const handlePathSelection = (path) => {
                 const buttonContainer = document.getElementById('path-choice-container');
                 if (buttonContainer) { buttonContainer.remove(); }
                 addMessage('user', `I'll take the "${path}" path.`);
                 
-                // UPDATED: Route to the correct function based on path
-                if (path === 'Quick Guidance') {
-                    getQuickGuidance();
-                } else {
-                    conversationState = 'IN_COACHING';
-                    const startMessage = `The user's situation relates to ${userContext}. Their challenge is: "${userChallenge}". They have chosen the path of "Situation-Specific Coaching". Please begin the coaching process according to the instructions for that path in your system prompt.`;
-                    chatHistory.push({ role: "user", parts: [{ text: startMessage }] });
-                    showChatSpinner();
-                    // This is a "fake" user message to kickstart the AI
-                    getBotResponse("Okay, let's begin."); 
-                }
+                conversationState = 'IN_COACHING';
+                showChatSpinner();
+                // This now correctly passes the chosen path to the main getBotResponse function
+                // which will instruct the AI to follow the multi-step conversational flow.
+                getBotResponse(null, path); 
             };
 
             const handleSend = async () => {
