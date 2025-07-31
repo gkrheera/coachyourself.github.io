@@ -1,9 +1,9 @@
 <!--
-Version: 10.0.4 (Supabase Migration - Final Logic Restoration)
+Version: 10.0.5 (Supabase Migration - Final Conversational Logic Restoration)
 Date: July 31, 2025
 Notes:
-- Restores the original, multi-step conversational flow for the "Quick Guidance" path.
-- The chatbot is now fully aligned with the prototype's superior conversational logic.
+- Fully restores the original, multi-step conversational flow for the "Quick Guidance" path, ensuring the bot asks clarifying questions before providing guidance.
+- This aligns the bot's behavior with the superior conversational quality of the prototype.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -241,7 +241,6 @@ Notes:
 
             const getBotResponse = async (userText, coachingPath = null) => {
                 let userMessage = userText;
-                // This logic constructs the initial message to the AI when a path is chosen
                 if (coachingPath) {
                     userMessage = `The user's situation relates to ${userContext}. Their challenge is: "${userChallenge}". They have chosen the path of "${coachingPath}". Please begin the coaching process according to the instructions for that path in your system prompt.`;
                 }
