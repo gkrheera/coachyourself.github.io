@@ -1,10 +1,9 @@
 <!--
-Version: 11.0.0 (Single-Path Conversation Restoration)
-Date: July 31, 2025
+Version: 12.0.0 (ICF, ACT, RFT & Context-Specific Integration)
+Date: August 1, 2025
 Notes:
-- Eliminates the "Quick Guidance" vs. "Situation-Specific Coaching" paths.
-- Restores the single, high-quality conversational flow from the v6.0.0 prototype.
-- Removes all voice-based support (TTS and STT) for a cleaner, text-focused experience.
+- System prompt has been completely overhauled to integrate ICF, ACT, RFT principles and context-specific frameworks.
+- Frontend logic in handleSend is now structured to first ask for context, then establish the session agreement.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -81,7 +80,7 @@ Notes:
 
             // --- STATE MANAGEMENT ---
             let chatHistory = [];
-            let conversationState = 'AWAITING_CHALLENGE';
+            let conversationState = 'AWAITING_CHALLENGE'; // AWAITING_CHALLENGE, AWAITING_CONTEXT, AGREEMENT, EXPLORATION, ACTION_PLANNING
 
             // --- UI ELEMENTS ---
             const chatWindow = document.getElementById('chat-window');
@@ -137,6 +136,7 @@ Notes:
                     });
                     if (error) throw error;
                     const botResponse = data.botResponse;
+                    
                     chatHistory.push({ role: "model", parts: [{ text: botResponse }] });
                     hideChatSpinner();
                     addMessage('bot', botResponse);
@@ -154,6 +154,18 @@ Notes:
                 chatInput.value = '';
                 
                 chatHistory.push({ role: "user", parts: [{ text: userText }] });
+
+                // Advance the conversation state based on the current state
+                if (conversationState === 'AWAITING_CHALLENGE') {
+                    conversationState = 'AWAITING_CONTEXT';
+                } else if (conversationState === 'AWAITING_CONTEXT') {
+                    conversationState = 'AGREEMENT';
+                } else if (conversationState === 'AGREEMENT') {
+                    conversationState = 'EXPLORATION';
+                } else if (conversationState === 'EXPLORATION') {
+                    // Logic to detect if we are moving to action planning can be added here
+                    // For now, we stay in exploration.
+                }
                 
                 sendButton.disabled = true;
                 showChatSpinner();
@@ -175,4 +187,3 @@ Notes:
     </script>
 </body>
 </html>
-
